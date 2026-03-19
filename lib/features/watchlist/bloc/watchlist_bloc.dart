@@ -33,10 +33,10 @@ final class WatchlistBloc extends Bloc<WatchlistEvent, WatchlistState> {
     }
   }
 
-  void _onReorderStock(
+  Future<void> _onReorderStock(
     ReorderStock event,
     Emitter<WatchlistState> emit,
-  ) {
+  ) async {
     if (state is! WatchlistLoaded) return;
 
     final currentState = state as WatchlistLoaded;
@@ -44,7 +44,7 @@ final class WatchlistBloc extends Bloc<WatchlistEvent, WatchlistState> {
 
     // Flutter's ReorderableListView passes `newIndex` calculated before the
     // item is removed from `oldIndex`. When moving downward the index is
-    // therefore one too high – subtract 1 to normalise.
+    // therefore one too high -- subtract 1 to normalise.
     final normalised =
         event.newIndex > event.oldIndex ? event.newIndex - 1 : event.newIndex;
 
@@ -52,12 +52,13 @@ final class WatchlistBloc extends Bloc<WatchlistEvent, WatchlistState> {
     stocks.insert(normalised, stock);
 
     emit(currentState.copyWith(stocks: stocks));
+    await repository.saveOrder(stocks.map((s) => s.id).toList());
   }
 
-  void _onRemoveStock(
+  Future<void> _onRemoveStock(
     RemoveStock event,
     Emitter<WatchlistState> emit,
-  ) {
+  ) async {
     if (state is! WatchlistLoaded) return;
 
     final currentState = state as WatchlistLoaded;
@@ -65,6 +66,7 @@ final class WatchlistBloc extends Bloc<WatchlistEvent, WatchlistState> {
         currentState.stocks.where((s) => s.id != event.stockId).toList();
 
     emit(currentState.copyWith(stocks: updated));
+    await repository.saveOrder(updated.map((s) => s.id).toList());
   }
 
   void _onSearchWatchlist(

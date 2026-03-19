@@ -15,6 +15,7 @@ search, a dedicated edit screen, and a delete-confirmation dialog.
 | **Edit Watchlist screen**  | Separate screen with editable watchlist name, drag handles, and delete icons |
 | **Drag-to-reorder**        | Hamburger (=) handle triggers ReorderableDragStartListener; order persisted in BLoC |
 | **Delete with confirmation** | Tapping the trash icon shows an AlertDialog; stock removed only on confirm |
+| **Persistence**            | Reorder and deletions survive app restarts via SharedPreferences           |
 | **Light theme**            | Matches the 021Trade reference UI -- white background, coloured price ticks |
 | **BLoC state management**  | Full event -> state cycle with sealed classes and Equatable               |
 | **Loading / error / empty states** | Spinner on load, retry on error, friendly empty and no-results views |
@@ -149,6 +150,28 @@ final stock = stocks.removeAt(event.oldIndex);
 stocks.insert(normalised, stock);
 ```
 
+### Persistence (SharedPreferences)
+
+The watchlist order and deletions survive app restarts. The repository stores
+an ordered list of stock IDs under the key `watchlist_order`:
+
+```dart
+// Save -- called after every reorder or remove in the bloc
+await repository.saveOrder(stocks.map((s) => s.id).toList());
+
+// Restore -- called on app start inside loadWatchlist()
+final savedIds = prefs.getStringList('watchlist_order');
+if (savedIds != null) {
+  final stockMap = {for (final s in _sampleStocks) s.id: s};
+  return savedIds.map((id) => stockMap[id]).whereType<Stock>().toList();
+}
+```
+
+Stocks deleted by the user simply have no entry in `savedIds`, so they are
+filtered out automatically on the next load.
+
+---
+
 ### Delete Confirmation
 
 ```dart
@@ -188,8 +211,9 @@ if (confirmed == true && context.mounted) {
 
 | Package        | Version  | Purpose                             |
 |----------------|----------|-------------------------------------|
-| `flutter_bloc` | ^8.1.6   | BLoC / Cubit state management       |
-| `equatable`    | ^2.0.5   | Value-equality for events and states|
+| `flutter_bloc`       | ^8.1.6   | BLoC / Cubit state management              |
+| `equatable`          | ^2.0.5   | Value-equality for events and states       |
+| `shared_preferences` | ^2.3.2   | Persist watchlist order across app restarts|
 
 ---
 

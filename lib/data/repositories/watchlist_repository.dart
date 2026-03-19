@@ -1,10 +1,14 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/stock.dart';
 
-/// Provides watchlist data.
+/// Provides watchlist data and persists the user's ordering/deletions locally.
 ///
-/// In a production app this would communicate with a remote API or local DB.
-/// Here it returns a curated set of NSE-listed stocks as sample data.
+/// Order and removed stocks are stored as an ordered list of IDs in
+/// SharedPreferences. On the next load the list is restored to the saved state.
 final class WatchlistRepository {
+  static const String _orderKey = 'watchlist_order';
+
   static const List<Stock> _sampleStocks = [
     Stock(
       id: '1',
@@ -138,10 +142,31 @@ final class WatchlistRepository {
     ),
   ];
 
-  /// Returns all stocks in the watchlist.
-  /// Simulates a short asynchronous delay to mirror a real data source.
+  /// Loads the watchlist, restoring the user's last saved order and deletions.
+  ///
+  /// On first launch (no saved data) the default [_sampleStocks] order is used.
+  /// After any reorder or delete, [saveOrder] records the new state so it
+  /// survives app restarts.
   Future<List<Stock>> loadWatchlist() async {
     await Future.delayed(const Duration(milliseconds: 600));
-    return List.of(_sampleStocks);
+
+    final prefs = await SharedPreferences.getInstance();
+    final savedIds = prefs.getStringList(_orderKey);
+
+    // No saved state yet -- return default order.
+    if (savedIds == null) return List.of(_sampleStocks);
+
+    // Reconstruct the list in saved order, skipping deleted stocks.
+    final stockMap = {for (final s in _sampleStocks) s.id: s};
+    return savedIds.map((id) => stockMap[id]).whereType<Stock>().toList();
+  }
+
+  /// Persists [stockIds] as the current watchlist order.
+  ///
+  /// Call this after every reorder or remove operation so the state survives
+  /// app restarts.
+  Future<void> saveOrder(List<String> stockIds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_orderKey, stockIds);
   }
 }
