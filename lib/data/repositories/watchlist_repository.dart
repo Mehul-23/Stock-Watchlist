@@ -1,10 +1,41 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/stock.dart';
 
-/// Provides watchlist data.
+/// Provides watchlist data and persists the user's ordering/deletions locally.
 ///
-/// In a production app this would communicate with a remote API or local DB.
-/// Here it returns a curated set of NSE-listed stocks as sample data.
-final class WatchlistRepository {
+/// **Design note -- replaceable layer**
+/// This class is the single point of contact between the BLoC and the data
+/// source. Swapping it for a live implementation (REST polling, WebSocket
+/// stream, gRPC, etc.) requires no changes to the BLoC or UI layers -- only
+/// this class needs to be updated. The public API surface is intentionally
+/// minimal:
+///   * [loadWatchlist]  -- fetch ordered stock list (async, may throw)
+///   * [saveOrder]      -- persist user-defined order / deletions
+///
+/// Declared as `interface class` so it can be implemented (e.g. mocked in
+/// tests) but not extended with extra concrete behaviour outside this library.
+///
+/// **Simulated network behaviour**
+/// [loadWatchlist] honours two constructor flags so the app can be demoed in
+/// different conditions without changing any other code:
+///   * [networkDelayMs] -- simulates REST/WebSocket latency (default 800 ms)
+///   * [simulateError]  -- when true, throws an exception to exercise the
+///                         BLoC error state and the UI retry flow
+interface class WatchlistRepository {
+  /// Simulated network latency in milliseconds.
+  final int networkDelayMs;
+
+  /// When true [loadWatchlist] throws, exercising the error state / retry UI.
+  final bool simulateError;
+
+  const WatchlistRepository({
+    this.networkDelayMs = 800,
+    this.simulateError = false,
+  });
+
+  static const String _orderKey = 'watchlist_order';
+
   static const List<Stock> _sampleStocks = [
     Stock(
       id: '1',
@@ -138,10 +169,41 @@ final class WatchlistRepository {
     ),
   ];
 
-  /// Returns all stocks in the watchlist.
-  /// Simulates a short asynchronous delay to mirror a real data source.
+  /// Loads the watchlist, restoring the user's last saved order and deletions.
+  ///
+  /// Simulates [networkDelayMs] of latency to mirror a real network call.
+  /// Throws a [Exception] when [simulateError] is true so the BLoC error
+  /// state and the UI retry button can be exercised without a live backend.
+  ///
+  /// **To swap in a real API:** replace the body of this method with an HTTP
+  /// GET (or WebSocket subscription) call that returns `List<Stock>`. The
+  /// BLoC and UI layers require zero changes.
   Future<List<Stock>> loadWatchlist() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    return List.of(_sampleStocks);
+    await Future.delayed(Duration(milliseconds: networkDelayMs));
+
+    if (simulateError) {
+      throw Exception(
+        'Failed to load watchlist. Check your network connection and try again.',
+      );
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final savedIds = prefs.getStringList(_orderKey);
+
+    // No saved state yet -- return default order.
+    if (savedIds == null) return List.of(_sampleStocks);
+
+    // Reconstruct the list in saved order, skipping deleted stocks.
+    final stockMap = {for (final s in _sampleStocks) s.id: s};
+    return savedIds.map((id) => stockMap[id]).whereType<Stock>().toList();
+  }
+
+  /// Persists [stockIds] as the current watchlist order.
+  ///
+  /// Call this after every reorder or remove operation so the state survives
+  /// app restarts.
+  Future<void> saveOrder(List<String> stockIds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_orderKey, stockIds);
   }
 }

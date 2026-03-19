@@ -84,94 +84,201 @@ class _EditWatchlistScreenState extends State<EditWatchlistScreen> {
 
 // ─── Edit Body ────────────────────────────────────────────────────────────────
 
-class _EditBody extends StatelessWidget {
+class _EditBody extends StatefulWidget {
   final List<Stock> stocks;
   final TextEditingController nameController;
 
   const _EditBody({required this.stocks, required this.nameController});
 
   @override
+  State<_EditBody> createState() => _EditBodyState();
+}
+
+class _EditBodyState extends State<_EditBody> {
+  // Local copy of stocks drives the ReorderableListView so that reorder
+  // animations are not interrupted by a BLoC-triggered rebuild.
+  late List<Stock> _stocks;
+
+  @override
+  void initState() {
+    super.initState();
+    _stocks = List.of(widget.stocks);
+  }
+
+  // Sync deletions that arrive via bloc (BlocListener calls this).
+  void _syncFromBloc(List<Stock> updated) {
+    setState(() => _stocks = List.of(updated));
+  }
+
+  void _onReorder(int oldIndex, int newIndex) {
+    // 1. Update local list immediately so the settle animation plays smoothly.
+    setState(() {
+      final normalised = newIndex > oldIndex ? newIndex - 1 : newIndex;
+      final stock = _stocks.removeAt(oldIndex);
+      _stocks.insert(normalised, stock);
+    });
+
+    // 2. Dispatch to bloc only for persistence (does NOT rebuild this widget).
+    context
+        .read<WatchlistBloc>()
+        .add(ReorderStock(oldIndex: oldIndex, newIndex: newIndex));
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // ── Watchlist name field ────────────────────────────────────────────
-        Container(
-          margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          decoration: BoxDecoration(
-            color: AppColors.editCard,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AppColors.editDivider, width: 0.8),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: nameController,
-                  style: AppTextStyles.stockSymbol,
-                  decoration: const InputDecoration(
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: InputBorder.none,
-                    isDense: true,
+    // BlocListener syncs deletions back to local state without rebuilding
+    // the whole widget tree when a reorder is in progress.
+    return BlocListener<WatchlistBloc, WatchlistState>(
+      listenWhen: (previous, current) =>
+          current is WatchlistLoaded &&
+          previous is WatchlistLoaded &&
+          current.stocks.length != previous.stocks.length,
+      listener: (context, state) {
+        if (state is WatchlistLoaded) _syncFromBloc(state.stocks);
+      },
+      child: Column(
+        children: [
+          // ── Watchlist name field ──────────────────────────────────────────
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            decoration: BoxDecoration(
+              color: AppColors.editCard,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.editDivider, width: 0.8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: widget.nameController,
+                    style: AppTextStyles.stockSymbol,
+                    decoration: const InputDecoration(
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
                   ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(right: 12),
-                child: Icon(Icons.edit_outlined,
-                    size: 18, color: AppColors.textSecondary),
-              ),
-            ],
+                const Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: Icon(Icons.edit_outlined,
+                      size: 18, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
           ),
-        ),
 
-        // ── Reorderable stock list ──────────────────────────────────────────
-        Expanded(
-          child: ReorderableListView.builder(
-            buildDefaultDragHandles: false,
-            padding: EdgeInsets.zero,
-            proxyDecorator: _proxyDecorator,
-            onReorder: (oldIndex, newIndex) {
-              context.read<WatchlistBloc>().add(
-                    ReorderStock(oldIndex: oldIndex, newIndex: newIndex),
-                  );
-            },
-            itemCount: stocks.length,
-            itemBuilder: (context, index) {
-              final stock = stocks[index];
-              return _EditStockTile(
-                key: ValueKey(stock.id),
-                stock: stock,
-                index: index,
-                onDelete: () {
-                  context
-                      .read<WatchlistBloc>()
-                      .add(RemoveStock(stockId: stock.id));
-                },
-              );
-            },
+          // ── Reorderable stock list ────────────────────────────────────────
+          Expanded(
+            child: ReorderableListView.builder(
+              buildDefaultDragHandles: false,
+              padding: EdgeInsets.zero,
+              proxyDecorator: _proxyDecorator,
+              onReorder: _onReorder,
+              itemCount: _stocks.length,
+              itemBuilder: (context, index) {
+                final stock = _stocks[index];
+                return _EditStockTile(
+                  key: ValueKey(stock.id),
+                  stock: stock,
+                  index: index,
+                  onDelete: () =>
+                      _confirmDelete(context, stock.id, stock.symbol),
+                );
+              },
+            ),
           ),
-        ),
 
-        // ── "Edit other watchlists" button ──────────────────────────────────
-        _EditOtherButton(),
+          // ── "Edit other watchlists" button ────────────────────────────────
+          _EditOtherButton(),
 
-        // ── Save bar ────────────────────────────────────────────────────────
-        _SaveBar(onSave: () => Navigator.of(context).pop()),
-      ],
+          // ── Save bar ──────────────────────────────────────────────────────
+          _SaveBar(onSave: () => Navigator.of(context).pop()),
+        ],
+      ),
     );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    String stockId,
+    String symbol,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          'Remove Stock',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to remove $symbol from your watchlist?',
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary,
+            height: 1.4,
+          ),
+        ),
+        actionsPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.loss,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'Remove',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      context.read<WatchlistBloc>().add(RemoveStock(stockId: stockId));
+    }
   }
 
   Widget _proxyDecorator(Widget child, int index, Animation<double> animation) {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
-        final t = Curves.easeInOut.transform(animation.value);
-        return Material(
-          color: Colors.white,
-          elevation: t * 8,
-          shadowColor: Colors.black26,
-          child: child,
+        final t = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOut,
+        ).value;
+        // Subtle lift: scale 1.0 -> 1.02 and shadow 0 -> 10
+        return Transform.scale(
+          scale: 1.0 + (0.02 * t),
+          child: Material(
+            color: Colors.white,
+            elevation: t * 10,
+            shadowColor: Colors.black26,
+            child: child,
+          ),
         );
       },
       child: child,
