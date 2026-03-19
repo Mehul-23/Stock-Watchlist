@@ -13,14 +13,14 @@ search, a dedicated edit screen, and a delete-confirmation dialog.
 | **Watchlist screen**       | Market ticker bar, search bar, watchlist tab strip, flat stock list        |
 | **Live search**            | Filters stocks by symbol or name on every keystroke; shows a no-results state |
 | **Edit Watchlist screen**  | Separate screen with editable watchlist name, drag handles, and delete icons |
-| **Drag-to-reorder**        | Hamburger (=) handle triggers ReorderableDragStartListener; order persisted in BLoC |
+| **Drag-to-reorder**        | Smooth settle animation via local-state pattern; `ReorderableDragStartListener` on (=) handle; order persisted via BLoC |
 | **Delete with confirmation** | Tapping the trash icon shows an AlertDialog; stock removed only on confirm |
 | **Persistence**            | Reorder and deletions survive app restarts via SharedPreferences           |
 | **Light theme**            | Matches the 021Trade reference UI -- white background, coloured price ticks |
 | **BLoC state management**  | Full event -> state cycle with sealed classes and Equatable               |
 | **Loading / error / empty states** | Spinner on load, retry on error, friendly empty and no-results views |
 | **Bottom navigation bar**  | Watchlist, Orders, GTT+, Portfolio, Funds, Profile tabs                    |
-| **Unit tests**             | BLoC core logic covered: load, reorder, delete, search (13 tests)          |
+| **Unit tests**             | BLoC core logic covered: load, reorder, delete, search (14 tests: 13 BLoC unit + 1 widget smoke) |
 
 ---
 
@@ -75,7 +75,8 @@ lib/
 - **AppBar** -- back arrow + "Edit Watchlist 1" title
 - **Name field** -- editable TextField pre-filled with the watchlist name + pencil icon
 - **Reorderable list** -- ReorderableListView with buildDefaultDragHandles: false;
-  each row has a (=) drag handle and a trash delete icon
+  each row has a (=) drag handle and a trash delete icon; local-state pattern ensures
+  smooth settle animations (see [Smooth Drag Animation](#smooth-drag-animation))
 - **Delete confirmation dialog** -- AlertDialog asking "Are you sure you want to
   remove SYMBOL?" with Cancel and red Remove buttons
 - **"Edit other watchlists"** -- secondary action button
@@ -173,6 +174,38 @@ List<Stock> get filteredStocks {
 }
 ```
 
+### Smooth Drag Animation
+
+`ReorderableListView` plays a settle animation after a drag ends. When the
+screen was a pure `BlocBuilder`, the BLoC emitting a new state after each
+drag caused a rebuild that interrupted the animation mid-flight, producing a
+visible snap.
+
+Fixed with the **local-state pattern**:
+
+- `_EditBodyState` owns a local `_stocks` list that drives the `ReorderableListView`
+- `_onReorder` updates the local list via `setState` immediately -- the settle
+  animation completes uninterrupted
+- `ReorderStock` is still dispatched to the BLoC, but only for persistence;
+  it no longer triggers a rebuild of the edit screen
+- Deletions are synced back from the BLoC via a `BlocListener` with
+  `listenWhen: (prev, curr) => curr.stocks.length != prev.stocks.length`
+
+The drag proxy decorator gives tactile feedback by scaling the lifted tile up
+by 2% and increasing shadow depth:
+
+```dart
+Transform.scale(
+  scale: 1.0 + (0.02 * t),   // subtle lift (2% at peak)
+  child: Material(elevation: t * 10, ...),
+)
+```
+
+`t` is driven by a `CurvedAnimation(curve: Curves.easeInOut)`, so the lift
+and drop both feel smooth.
+
+---
+
 ### Reorder Off-by-One Fix
 
 Flutter's `ReorderableListView` passes a `newIndex` calculated *before* the item
@@ -257,10 +290,18 @@ if (confirmed == true && context.mounted) {
 
 - **`sealed` classes** -- exhaustive `switch` expressions enforced at compile
   time; no missed state.
-- **`final class`** -- Bloc, events, states, repository, and model are all
-  `final` to prevent unintended subclassing.
-- **No `setState` anywhere** -- all mutable state lives exclusively in
-  `WatchlistBloc`.
+- **`final` / `interface` classes** -- Bloc, events, states, and model are
+  `final` to prevent unintended subclassing. `WatchlistRepository` uses
+  `interface class` so tests can implement it via `MockWatchlistRepository`
+  without code generation.
+- **Local-state pattern for drag animation** -- `_EditBodyState` maintains a
+  local copy of the stock list so `ReorderableListView`'s settle animation is
+  never interrupted by a BLoC state emission. The BLoC receives `ReorderStock`
+  only for persistence after the drag ends; deletions are synced back through a
+  scoped `BlocListener`.
+- **Minimal `setState`** -- `setState` is used only inside `_EditBodyState` for
+  the single responsibility of driving drag animations; all other mutable state
+  lives exclusively in `WatchlistBloc`.
 - **Single-responsibility widgets** -- screens contain no business logic; they
   only map BLoC states to private sub-widget classes.
 - **Light theme** -- `ColorScheme.light` with a blue primary (#387ED1), green
