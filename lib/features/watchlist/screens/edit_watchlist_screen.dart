@@ -143,11 +143,7 @@ class _EditBody extends StatelessWidget {
                 key: ValueKey(stock.id),
                 stock: stock,
                 index: index,
-                onDelete: () {
-                  context
-                      .read<WatchlistBloc>()
-                      .add(RemoveStock(stockId: stock.id));
-                },
+                onDelete: () => _confirmDelete(context, stock.id, stock.symbol),
               );
             },
           ),
@@ -160,6 +156,68 @@ class _EditBody extends StatelessWidget {
         _SaveBar(onSave: () => Navigator.of(context).pop()),
       ],
     );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    String stockId,
+    String symbol,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          'Remove Stock',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to remove $symbol from your watchlist?',
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary,
+            height: 1.4,
+          ),
+        ),
+        actionsPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.loss,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'Remove',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      context.read<WatchlistBloc>().add(RemoveStock(stockId: stockId));
+    }
   }
 
   Widget _proxyDecorator(Widget child, int index, Animation<double> animation) {
