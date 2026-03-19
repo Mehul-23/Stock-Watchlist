@@ -122,6 +122,41 @@ underlying list is never mutated by a search.
 
 ## Key Implementation Details
 
+### Repository Layer
+
+The repository is the **only** layer that knows about the data source. Replacing
+static sample data with a live backend requires changing nothing outside this
+class:
+
+```dart
+// To wire a REST API, replace loadWatchlist() with:
+final response = await http.get(Uri.parse('https://api.example.com/watchlist'));
+return (jsonDecode(response.body) as List)
+    .map(Stock.fromJson)
+    .toList();
+
+// To wire a WebSocket stream, emit states from the bloc's stream handler
+// -- the BLoC interface stays identical.
+```
+
+Two constructor flags let you demo different conditions without touching any
+other code:
+
+| Flag             | Default | Effect                                               |
+|------------------|---------|------------------------------------------------------|
+| `networkDelayMs` | `800`   | Simulates REST / WebSocket latency; shows the spinner|
+| `simulateError`  | `false` | Throws on load; exercises the error state and retry  |
+
+```dart
+// In app.dart -- flip simulateError: true to test the retry flow
+repository: const WatchlistRepository(
+  networkDelayMs: 2000,   // slow network
+  simulateError: true,    // force error state
+),
+```
+
+---
+
 ### Live Search
 
 ```dart
@@ -204,6 +239,11 @@ if (confirmed == true && context.mounted) {
   separate so the edit flow can be navigated into and out of cleanly.
 - **`filteredStocks` computed getter** -- search never mutates the stocks list;
   the query is stored independently, making it trivial to clear.
+- **Repository layer designed for replacement** -- `WatchlistRepository` is the
+  single point of contact between the BLoC and the data source. Swapping it for
+  a live REST or WebSocket implementation requires no changes to the BLoC or UI
+  layers. The public API surface is intentionally minimal: `loadWatchlist()` and
+  `saveOrder()`.
 
 ---
 

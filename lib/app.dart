@@ -19,8 +19,11 @@ class WatchlistApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: BlocProvider(
-        create: (_) => WatchlistBloc(repository: WatchlistRepository())
-          ..add(const LoadWatchlist()),
+        create: (_) => WatchlistBloc(
+          // networkDelayMs: 800  -- default; raise to simulate slow network
+          // simulateError: true  -- uncomment to test the error state & retry UI
+          repository: const WatchlistRepository(),
+        )..add(const LoadWatchlist()),
         child: const WatchlistScreen(),
       ),
     );
