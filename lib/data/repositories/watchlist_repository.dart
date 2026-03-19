@@ -4,22 +4,25 @@ import '../models/stock.dart';
 
 /// Provides watchlist data and persists the user's ordering/deletions locally.
 ///
-/// **Design note – replaceable layer**
+/// **Design note -- replaceable layer**
 /// This class is the single point of contact between the BLoC and the data
 /// source. Swapping it for a live implementation (REST polling, WebSocket
-/// stream, gRPC, etc.) requires no changes to the BLoC or UI layers – only
+/// stream, gRPC, etc.) requires no changes to the BLoC or UI layers -- only
 /// this class needs to be updated. The public API surface is intentionally
 /// minimal:
-///   * [loadWatchlist]  – fetch ordered stock list (async, may throw)
-///   * [saveOrder]      – persist user-defined order / deletions
+///   * [loadWatchlist]  -- fetch ordered stock list (async, may throw)
+///   * [saveOrder]      -- persist user-defined order / deletions
+///
+/// Declared as `interface class` so it can be implemented (e.g. mocked in
+/// tests) but not extended with extra concrete behaviour outside this library.
 ///
 /// **Simulated network behaviour**
 /// [loadWatchlist] honours two constructor flags so the app can be demoed in
 /// different conditions without changing any other code:
-///   * [networkDelayMs] – simulates REST/WebSocket latency (default 800 ms)
-///   * [simulateError]  – when true, throws an exception to exercise the
-///                        BLoC error state and the UI retry flow
-final class WatchlistRepository {
+///   * [networkDelayMs] -- simulates REST/WebSocket latency (default 800 ms)
+///   * [simulateError]  -- when true, throws an exception to exercise the
+///                         BLoC error state and the UI retry flow
+interface class WatchlistRepository {
   /// Simulated network latency in milliseconds.
   final int networkDelayMs;
 

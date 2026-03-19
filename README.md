@@ -20,6 +20,7 @@ search, a dedicated edit screen, and a delete-confirmation dialog.
 | **BLoC state management**  | Full event -> state cycle with sealed classes and Equatable               |
 | **Loading / error / empty states** | Spinner on load, retry on error, friendly empty and no-results views |
 | **Bottom navigation bar**  | Watchlist, Orders, GTT+, Portfolio, Funds, Profile tabs                    |
+| **Unit tests**             | BLoC core logic covered: load, reorder, delete, search (13 tests)          |
 
 ---
 
@@ -207,6 +208,35 @@ filtered out automatically on the next load.
 
 ---
 
+## Testing
+
+Basic unit tests cover the core BLoC logic in `test/watchlist_bloc_test.dart`.
+
+```
+flutter test test/watchlist_bloc_test.dart
+```
+
+| Group          | Test case                                              | Asserts                              |
+|----------------|--------------------------------------------------------|--------------------------------------|
+| LoadWatchlist  | success path                                           | emits Loading then Loaded            |
+| LoadWatchlist  | repository throws                                      | emits Loading then Error             |
+| ReorderStock   | move downward (oldIndex < newIndex)                    | correct new order + saveOrder called |
+| ReorderStock   | move upward (oldIndex > newIndex)                      | correct new order + saveOrder called |
+| ReorderStock   | wrong state (not Loaded)                               | no emission                          |
+| RemoveStock    | removes by id                                          | stock gone + saveOrder called        |
+| RemoveStock    | non-existent id                                        | no emission (state unchanged)        |
+| RemoveStock    | wrong state (not Loaded)                               | no emission                          |
+| SearchWatchlist| query stored in state                                  | searchQuery updated                  |
+| SearchWatchlist| filteredStocks filters by symbol                       | correct subset returned              |
+| SearchWatchlist| filteredStocks filters by name (case-insensitive)      | correct subset returned              |
+| SearchWatchlist| empty query returns all stocks                         | full list returned                   |
+| SearchWatchlist| no match returns empty list                            | empty list returned                  |
+
+`WatchlistRepository` uses the `interface class` modifier so it can be
+implemented by `MockWatchlistRepository` in tests without any code generation.
+
+---
+
 ### Delete Confirmation
 
 ```dart
@@ -254,6 +284,8 @@ if (confirmed == true && context.mounted) {
 | `flutter_bloc`       | ^8.1.6   | BLoC / Cubit state management              |
 | `equatable`          | ^2.0.5   | Value-equality for events and states       |
 | `shared_preferences` | ^2.3.2   | Persist watchlist order across app restarts|
+| `bloc_test` *(dev)*  | ^9.1.7   | BLoC-aware test helpers and matchers       |
+| `mocktail` *(dev)*   | ^1.0.4   | Type-safe mocking without code generation  |
 
 ---
 
