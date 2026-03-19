@@ -92,7 +92,7 @@ lib/
 - **Name field** -- editable TextField pre-filled with the watchlist name + pencil icon
 - **Reorderable list** -- ReorderableListView with buildDefaultDragHandles: false;
   each row has a (=) drag handle and a trash delete icon; local-state pattern ensures
-  smooth settle animations (see [Smooth Drag Animation](#smooth-drag-animation))
+  smooth settle animations.
 - **Delete confirmation dialog** -- AlertDialog asking "Are you sure you want to
   remove SYMBOL?" with Cancel and red Remove buttons
 - **"Edit other watchlists"** -- secondary action button
