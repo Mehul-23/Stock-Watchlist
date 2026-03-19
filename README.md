@@ -9,13 +9,16 @@ search, a dedicated edit screen, and a delete-confirmation dialog.
 ## Demo
 
 ### Watchlist Screen
-![Watchlist](assets/watchlist.png)
+<img width="503" height="710" alt="image" src="https://github.com/user-attachments/assets/c52dbf24-0d1f-4697-825a-21a8ed3af78e" />
+
 
 ### Edit Watchlist Screen
-![Edit](assets/edit.png)
+<img width="504" height="707" alt="image" src="https://github.com/user-attachments/assets/e73e2e03-2037-47c8-a1c6-d0151a30b927" />
+
 
 ### Reorder + Delete Flow
-![Demo](assets/demo.gif)
+![demo](https://github.com/user-attachments/assets/7e1d297f-9dd3-4ee6-9cf1-d9aab7142203)
+
 
 ---
 
