@@ -241,9 +241,19 @@ filtered out automatically on the next load.
 
 ---
 
+## Performance Considerations
+
+- Immutable state updates ensure predictable UI rendering with no stale data
+- Rebuilds scoped via `BlocBuilder` to avoid unnecessary widget rebuilds across
+  the tree
+- Local-state pattern prevents animation interruption during drag operations --
+  the `ReorderableListView` settle animation is never cut short by a BLoC emit
+
+---
+
 ## Testing
 
-Basic unit tests cover the core BLoC logic in `test/watchlist_bloc_test.dart`.
+Comprehensive unit tests validate core BLoC behavior in `test/watchlist_bloc_test.dart`.
 
 ```
 flutter test test/watchlist_bloc_test.dart
@@ -315,6 +325,9 @@ if (confirmed == true && context.mounted) {
   a live REST or WebSocket implementation requires no changes to the BLoC or UI
   layers. The public API surface is intentionally minimal: `loadWatchlist()` and
   `saveOrder()`.
+- **Designed to scale** -- the architecture supports multiple watchlists,
+  paginated stock lists, and real-time price updates via WebSocket streams
+  without structural changes to the BLoC or UI layers.
 
 ---
 
