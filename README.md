@@ -6,6 +6,19 @@ search, a dedicated edit screen, and a delete-confirmation dialog.
 
 ---
 
+## Demo
+
+### Watchlist Screen
+![Watchlist](assets/watchlist.png)
+
+### Edit Watchlist Screen
+![Edit](assets/edit.png)
+
+### Reorder + Delete Flow
+![Demo](assets/demo.gif)
+
+---
+
 ## Features
 
 | Feature                    | Detail                                                                     |
